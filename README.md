@@ -84,6 +84,9 @@ python clone_emotes.py --from streamerA --to streamerB --source-set "My Old Set"
 
 # Custom name for the new set
 python clone_emotes.py --from streamerA --to streamerB --source-set "My Old Set" --new-set --set-name "Imported from A"
+
+# Slow down requests (default is 0.2s between emote additions)
+python clone_emotes.py --from streamerA --to streamerB --delay 0.5
 ```
 
 ---
@@ -108,3 +111,13 @@ Emotes already present in the target set are detected both before the run (from 
 | `SEVENTV_TOKEN` | Write to the target emote set | Target account (owner or editor) |
 
 The source channel is always read from the public 7TV API — no credentials required.
+
+---
+
+## Rate limiting and capacity
+
+**Rate limiting**
+The script adds a 0.2 second delay between each emote mutation by default. If the API returns HTTP 429 (Too Many Requests), it will automatically retry up to 3 times using exponential backoff (2s, 4s, 8s), honouring the `Retry-After` response header if present. Use `--delay` to increase the gap between requests if you continue to hit limits on large sets.
+
+**Emote set capacity**
+7TV enforces a maximum number of emotes per set. The limit depends on the channel's 7TV subscription tier (typically 300 for unsubscribed channels, higher for subscribers). If the target set reaches capacity mid-copy, the script will stop immediately, report how many emotes were not attempted, and print a message advising a subscription upgrade. Emotes stopped by capacity are listed as not attempted rather than failed.

@@ -39,6 +39,7 @@ Examples
 import argparse
 import os
 import sys
+import time
 
 import requests
 from dotenv import load_dotenv
@@ -47,7 +48,12 @@ from dotenv import load_dotenv
 class EmoteNameConflictError(Exception):
     """Raised when the target set already contains an emote with the same name."""
 
+class EmoteSetCapacityError(Exception):
+    """Raised when the target emote set has no remaining capacity."""
+
 load_dotenv()
+
+_GQL_MAX_RETRIES = 3
 
 TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_USERS_URL = "https://api.twitch.tv/helix/users"
@@ -121,23 +127,32 @@ def _resolve_twitch_id(username: str, client_id: str, token: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _gql(query: str, variables: dict, token: str) -> dict:
-    resp = requests.post(
-        SEVENTV_GQL,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json={"query": query, "variables": variables},
-    )
-    resp.raise_for_status()
-    body = resp.json()
-    if "errors" in body:
-        error = body["errors"][0]
-        message = error.get("message", "")
-        # 7TV returns code 70403 or messages containing "already enabled" / "name taken"
-        # for duplicate-name conflicts; treat those as skippable rather than fatal.
-        code = error.get("extensions", {}).get("code")
-        if code == 70403 or any(k in message.lower() for k in ("already enabled", "name taken", "already in use")):
-            raise EmoteNameConflictError(message)
-        raise RuntimeError(message)
-    return body["data"]
+    for attempt in range(_GQL_MAX_RETRIES + 1):
+        resp = requests.post(
+            SEVENTV_GQL,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"query": query, "variables": variables},
+        )
+        if resp.status_code == 429:
+            if attempt == _GQL_MAX_RETRIES:
+                resp.raise_for_status()
+            # Honour Retry-After if present, otherwise exponential backoff (2s, 4s, 8s).
+            wait = int(resp.headers.get("Retry-After", 2 ** (attempt + 1)))
+            print(f"    [rate limited — waiting {wait}s before retry {attempt + 1}/{_GQL_MAX_RETRIES}]")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        body = resp.json()
+        if "errors" in body:
+            error   = body["errors"][0]
+            message = error.get("message", "")
+            code    = error.get("extensions", {}).get("code")
+            if code == 70403 or any(k in message.lower() for k in ("already enabled", "name taken", "already in use")):
+                raise EmoteNameConflictError(message)
+            if any(k in message.lower() for k in ("capacity", "no more room", "set is full")):
+                raise EmoteSetCapacityError(message)
+            raise RuntimeError(message)
+        return body["data"]
 
 
 def _get_seventv_user(twitch_id: str) -> dict:
@@ -249,6 +264,8 @@ def main() -> None:
                         help="Name for the new set (default: source set name). Requires --new-set")
     parser.add_argument("--activate", action="store_true",
                         help="Make the new set the active channel set after copying. Requires --new-set")
+    parser.add_argument("--delay", type=float, default=0.2, metavar="SECONDS",
+                        help="Seconds to wait between emote additions (default: 0.2)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Show what would be done without making any changes")
     args = parser.parse_args()
@@ -383,8 +400,10 @@ def main() -> None:
     # ── Copy emotes ──────────────────────────────────────────────────────────
     print()
     copied, skipped, failed = [], [], []
+    capacity_hit = False
+    emote_list   = sorted(to_copy.items())
 
-    for name, emote in sorted(to_copy.items()):
+    for i, (name, emote) in enumerate(emote_list):
         emote_id      = emote["id"]
         original_name = emote.get("data", {}).get("name", name)
         alias         = name if name != original_name else None
@@ -395,16 +414,29 @@ def main() -> None:
         except EmoteNameConflictError:
             print(f"  = {name}  (name already in target set — skipped)")
             skipped.append(name)
+        except EmoteSetCapacityError:
+            remaining = len(emote_list) - i
+            print(f"  ! {name}  (set is at capacity — stopping)")
+            print(f"    {remaining} emote(s) not attempted due to full set.")
+            failed.extend(name for name, _ in emote_list[i:])
+            capacity_hit = True
+            break
         except (requests.HTTPError, RuntimeError) as e:
             print(f"  ! {name} — {e}")
             failed.append(name)
+
+        if args.delay and i < len(emote_list) - 1:
+            time.sleep(args.delay)
 
     parts = [f"{len(copied)} copied"]
     if skipped:
         parts.append(f"{len(skipped)} skipped (name conflict)")
     if failed:
-        parts.append(f"{len(failed)} failed")
+        label = "not attempted (set full)" if capacity_hit else "failed"
+        parts.append(f"{len(failed)} {label}")
     print(f"\n{', '.join(parts)}.")
+    if capacity_hit:
+        print("The target set has reached its emote capacity. Upgrade the channel's 7TV subscription to increase the limit.")
 
     # ── Activate new set ─────────────────────────────────────────────────────
     if args.new_set and args.activate:
