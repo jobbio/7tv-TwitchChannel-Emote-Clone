@@ -23,10 +23,11 @@ python clone_emotes.py --from <source> --to <target>
 
 These are used only to resolve Twitch usernames to numeric IDs. They are not tied to either channel's identity.
 
-1. Go to [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) and click **Register Your Application**.
-2. Name it anything (e.g. `emote-clone`), set the OAuth Redirect URL to `http://localhost`, set the Client Type to **Confidential**, and choose any category.
-3. Click **Manage** on the created app and copy the **Client ID** and generate a **Client Secret**.
-4. Add both to your `.env`:
+1. Enable two-factor authentication on your Twitch account — Twitch requires this before allowing developer app registration. You can do this under **Settings → Security and Privacy** on twitch.tv.
+2. Go to [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) and click **Register Your Application**.
+3. Name it anything (e.g. `emote-clone`), set the OAuth Redirect URL to `http://localhost`, set the Client Type to **Confidential**, and choose any category.
+4. Click **Manage** on the created app and copy the **Client ID** and generate a **Client Secret**.
+5. Add both to your `.env`:
 
 ```
 TWITCH_CLIENT_ID=your_client_id_here
