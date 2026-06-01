@@ -73,14 +73,17 @@ python clone_emotes.py --from streamerA --to streamerB --list-source-sets
 # Copy from a specific source set (not the active one)
 python clone_emotes.py --from streamerA --to streamerB --source-set "My Old Set"
 
-# Clone source set as a brand-new named set on the target (does not affect active set)
+# Clone source's active set as a brand-new named set on the target (does not affect active set)
 python clone_emotes.py --from streamerA --to streamerB --new-set
 
+# Clone a specific source set as a brand-new named set on the target
+python clone_emotes.py --from streamerA --to streamerB --source-set "My Old Set" --new-set
+
 # Clone and immediately activate the new set
-python clone_emotes.py --from streamerA --to streamerB --new-set --activate
+python clone_emotes.py --from streamerA --to streamerB --source-set "My Old Set" --new-set --activate
 
 # Custom name for the new set
-python clone_emotes.py --from streamerA --to streamerB --new-set --set-name "Imported from A"
+python clone_emotes.py --from streamerA --to streamerB --source-set "My Old Set" --new-set --set-name "Imported from A"
 ```
 
 ---
