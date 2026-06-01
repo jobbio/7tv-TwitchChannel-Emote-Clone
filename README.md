@@ -87,7 +87,18 @@ python clone_emotes.py --from streamerA --to streamerB --source-set "My Old Set"
 
 # Slow down requests (default is 0.2s between emote additions)
 python clone_emotes.py --from streamerA --to streamerB --delay 0.5
+
+# Add a prefix to all copied emote names in the target set
+python clone_emotes.py --from streamerA --to streamerB --prefix "A_"
+
+# Prefix combined with a specific source set
+python clone_emotes.py --from streamerA --to streamerB --source-set "My Old Set" --prefix "A_"
+
+# Prefix combined with selected emotes only
+python clone_emotes.py --from streamerA --to streamerB --emotes PogChamp,Sadge --prefix "A_"
 ```
+
+> `--emotes` always matches against the original source names. The prefix is applied afterwards, so `--emotes PogChamp --prefix A_` copies `PogChamp` into the target as `A_PogChamp`.
 
 ---
 

@@ -264,6 +264,8 @@ def main() -> None:
                         help="Name for the new set (default: source set name). Requires --new-set")
     parser.add_argument("--activate", action="store_true",
                         help="Make the new set the active channel set after copying. Requires --new-set")
+    parser.add_argument("--prefix", metavar="PREFIX",
+                        help="Prepend a prefix to every emote name in the target set (e.g. 'A_')")
     parser.add_argument("--delay", type=float, default=0.2, metavar="SECONDS",
                         help="Seconds to wait between emote additions (default: 0.2)")
     parser.add_argument("--dry-run", action="store_true",
@@ -335,6 +337,10 @@ def main() -> None:
         if not_in_source:
             print(f"Warning: not found in source set: {', '.join(sorted(not_in_source))}")
         source_emotes = {k: v for k, v in source_emotes.items() if k in requested}
+
+    # Apply prefix after filtering so --emotes always uses original source names.
+    if args.prefix:
+        source_emotes = {f"{args.prefix}{name}": emote for name, emote in source_emotes.items()}
 
     if args.new_set:
         target_names = set()
