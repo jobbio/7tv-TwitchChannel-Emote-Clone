@@ -178,9 +178,9 @@ def _get_emote_set(set_id: str) -> dict:
     return resp.json()
 
 
-def _resolve_source_set(user: dict, name_or_id: str | None) -> dict:
+def _resolve_emote_set(user: dict, name_or_id: str | None, role: str = "source") -> dict:
     """
-    Return the emote set to use from the source user.
+    Return an emote set from a user.
 
     If name_or_id is None, return the active channel set.
     Otherwise match against the user's owned sets by name (case-insensitive) or ID,
@@ -189,7 +189,7 @@ def _resolve_source_set(user: dict, name_or_id: str | None) -> dict:
     if name_or_id is None:
         active = user.get("emote_set")
         if not active:
-            raise ValueError("Source channel has no active 7TV emote set.")
+            raise ValueError(f"{role.capitalize()} channel has no active 7TV emote set.")
         return active
 
     # The user response includes emote_sets: list of sets owned by this user.
@@ -259,6 +259,8 @@ def main() -> None:
                         help="Target Twitch channel name")
     parser.add_argument("--source-set", metavar="NAME_OR_ID",
                         help="Use a specific emote set from the source channel (default: active set)")
+    parser.add_argument("--target-set", metavar="NAME_OR_ID",
+                        help="Use a specific emote set on the target channel instead of its active set")
     parser.add_argument("--list-source-sets", action="store_true",
                         help="List all emote sets on the source channel and exit")
     parser.add_argument("--emotes", metavar="NAMES",
@@ -281,6 +283,8 @@ def main() -> None:
         parser.error("--activate requires --new-set")
     if args.set_name and not args.new_set:
         parser.error("--set-name requires --new-set")
+    if args.target_set and args.new_set:
+        parser.error("--target-set and --new-set are mutually exclusive")
 
     seventv_token        = os.environ.get("SEVENTV_TOKEN")
     twitch_client_id     = os.environ.get("TWITCH_CLIENT_ID")
@@ -307,6 +311,8 @@ def main() -> None:
         target_user = _get_seventv_user(target_twitch_id)
     except (requests.HTTPError, ValueError) as e:
         sys.exit(f"7TV lookup failed: {e}")
+    print(f"  {args.source} → https://7tv.app/users/{source_user['id']}")
+    print(f"  {args.target} → https://7tv.app/users/{target_user['id']}")
 
     # ── --list-source-sets ───────────────────────────────────────────────────
     if args.list_source_sets:
@@ -324,12 +330,18 @@ def main() -> None:
 
     # ── Resolve source set ───────────────────────────────────────────────────
     try:
-        source_set = _resolve_source_set(source_user, args.source_set)
+        source_set = _resolve_emote_set(source_user, args.source_set, role="source")
     except ValueError as e:
         sys.exit(str(e))
 
     # ── Resolve target set ───────────────────────────────────────────────────
-    target_set = target_user.get("emote_set") or {}
+    if args.target_set:
+        try:
+            target_set = _resolve_emote_set(target_user, args.target_set, role="target")
+        except ValueError as e:
+            sys.exit(str(e))
+    else:
+        target_set = target_user.get("emote_set") or {}
     if not args.new_set and not target_set:
         sys.exit(f"'{args.target}' has no active 7TV emote set. Use --new-set to create one.")
 
