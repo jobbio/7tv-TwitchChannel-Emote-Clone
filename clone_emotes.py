@@ -57,39 +57,46 @@ _GQL_MAX_RETRIES = 3
 
 TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_USERS_URL = "https://api.twitch.tv/helix/users"
-SEVENTV_GQL      = "https://7tv.io/v3/gql"
+SEVENTV_GQL      = "https://api.7tv.app/v4/gql"
 SEVENTV_API      = "https://7tv.io/v3"
 
 # ---------------------------------------------------------------------------
 # GraphQL mutations
 # ---------------------------------------------------------------------------
 
-_GQL_CHANGE_EMOTE = """
-mutation ChangeEmoteInSet($id: ObjectID!, $action: ListItemAction!, $emote_id: ObjectID!, $name: String) {
-  emoteSet(id: $id) {
-    emotes(id: $emote_id, action: $action, name: $name) {
-      id
-      name
+_GQL_ADD_EMOTE = """
+mutation AddEmoteToSet($setId: Id!, $emoteId: Id!, $alias: String) {
+  emoteSets {
+    emoteSet(id: $setId) {
+      addEmote(id: { emoteId: $emoteId, alias: $alias }) {
+        id
+        name
+      }
     }
   }
 }
 """
 
 _GQL_CREATE_EMOTE_SET = """
-mutation CreateEmoteSet($user_id: ObjectID!, $data: CreateEmoteSetInput!) {
-  createEmoteSet(user_id: $user_id, data: $data) {
-    id
-    name
-    capacity
+mutation CreateEmoteSet($name: String!, $ownerId: Id) {
+  emoteSets {
+    create(name: $name, tags: [], ownerId: $ownerId) {
+      id
+      name
+      capacity
+    }
   }
 }
 """
 
-_GQL_UPDATE_CONNECTION = """
-mutation UpdateUserConnection($id: ObjectID!, $conn_id: String!, $d: UserConnectionUpdate!) {
-  userConnection(id: $id, conn_id: $conn_id, d: $d) {
-    id
-    emote_set_id
+_GQL_ACTIVATE_SET = """
+mutation SetActiveEmoteSet($userId: Id!, $emoteSetId: Id) {
+  users {
+    user(id: $userId) {
+      activeEmoteSet(emoteSetId: $emoteSetId) {
+        id
+      }
+    }
   }
 }
 """
@@ -214,27 +221,25 @@ def _resolve_source_set(user: dict, name_or_id: str | None) -> dict:
 
 
 def _add_emote(set_id: str, emote_id: str, alias: str | None, token: str) -> None:
-    _gql(_GQL_CHANGE_EMOTE, {
-        "id": set_id,
-        "action": "ADD",
-        "emote_id": emote_id,
-        "name": alias,
+    _gql(_GQL_ADD_EMOTE, {
+        "setId": set_id,
+        "emoteId": emote_id,
+        "alias": alias,
     }, token)
 
 
 def _create_emote_set(user_id: str, name: str, token: str) -> dict:
     data = _gql(_GQL_CREATE_EMOTE_SET, {
-        "user_id": user_id,
-        "data": {"name": name},
+        "name": name,
+        "ownerId": user_id,
     }, token)
-    return data["createEmoteSet"]
+    return data["emoteSets"]["create"]
 
 
-def _activate_set(seventv_user_id: str, twitch_conn_id: str, set_id: str, token: str) -> None:
-    _gql(_GQL_UPDATE_CONNECTION, {
-        "id": seventv_user_id,
-        "conn_id": twitch_conn_id,
-        "d": {"emote_set_id": set_id},
+def _activate_set(seventv_user_id: str, set_id: str, token: str) -> None:
+    _gql(_GQL_ACTIVATE_SET, {
+        "userId": seventv_user_id,
+        "emoteSetId": set_id,
     }, token)
 
 
@@ -451,7 +456,7 @@ def main() -> None:
         else:
             print(f"Activating '{new_set_name}'...")
             try:
-                _activate_set(target_user["id"], target_twitch_id, dest_set_id, seventv_token)
+                _activate_set(target_user["id"], dest_set_id, seventv_token)
                 print("  Done — new set is now the active channel set.")
             except (requests.HTTPError, RuntimeError) as e:
                 print(f"  Activation failed: {e}")
