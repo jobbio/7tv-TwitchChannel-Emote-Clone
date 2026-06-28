@@ -42,8 +42,8 @@ To obtain the token:
 
 1. Open [7tv.app](https://7tv.app) in your browser and log in with the **target** Twitch account.
 2. Open DevTools (`F12`) and go to the **Network** tab.
-3. Filter requests by `gql` (or trigger any action on the site to generate a request).
-4. Click any request to `7tv.io/v3/gql` and open the **Headers** pane.
+3. Filter requests by `v4/gql` (or trigger any action on the site to generate a request).
+4. Click any request to `api.7tv.app/v4/gql` and open the **Headers** pane.
 5. Find the `Authorization` header — its value starts with `Bearer `. Copy everything **after** `Bearer `.
 6. Add it to your `.env`:
 
